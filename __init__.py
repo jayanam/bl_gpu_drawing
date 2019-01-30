@@ -1,8 +1,9 @@
 bl_info = {
-    "name" : "Line Strips",
+    "name" : "BL Gpu Drawing",
     "author" : "jayanam",
-    "description" : "",
+    "description" : "Experimental GPU drawing with Blender",
     "blender" : (2, 80, 0),
+    "version": (0, 1, 0, 1),
     "location" : "",
     "warning" : "",
     "category" : "Generic"

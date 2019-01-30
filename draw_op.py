@@ -15,6 +15,13 @@ from gpu_extras.batch import batch_for_shader
 import mathutils
 import math
 
+from mathutils.bvhtree import BVHTree
+
+from bpy_extras.view3d_utils import (
+    region_2d_to_vector_3d,
+    region_2d_to_origin_3d
+)
+
 class OT_draw_operator(Operator):
     bl_idname = "object.draw_op"
     bl_label = "Draw operator"
@@ -26,15 +33,24 @@ class OT_draw_operator(Operator):
         self.draw_handle_3d = None
         self.draw_event  = None
         self.mouse_vert = None
+        self.offset = 0.01
 
         self.vertices = []
         self.create_batch()
                 
+    @classmethod
+    def poll(cls, context):
+        return (context.active_object is not None
+            and context.active_object.mode == 'OBJECT')
+
     def invoke(self, context, event):
         args = (self, context)                   
         self.register_handlers(args, context)
                    
         context.window_manager.modal_handler_add(self)
+
+        self.bvhtree = self.bvhtree_from_object(context, context.active_object)
+
         return {"RUNNING_MODAL"}
     
     def register_handlers(self, args, context):
@@ -55,39 +71,33 @@ class OT_draw_operator(Operator):
         self.draw_handle_2d = None
         self.draw_handle_3d = None
         self.draw_event  = None
+        self.bvhtree = None
 
-    def get_snap_vertex_indizes(self, view_rot):
+    def bvhtree_from_object(self, context, object):
+        bm = bmesh.new()
 
-        v1 = round(abs(view_rot[0]), 3)
-        v2 = round(abs(view_rot[1]), 3)
+        mesh = object.to_mesh(context.depsgraph, True)
+        bm.from_mesh(mesh)
+        bm.transform(object.matrix_world)
 
-        if v1== 0.5 and v2 == 0.5:
-            return (1,2)
-        if (v1 == 0.707 and v2== 0.707) or (v1 == 0.0 and v2 == 0.0):
-           return (0,2)
-        return None
+        bvhtree = BVHTree.FromBMesh(bm)
+        bpy.data.meshes.remove(mesh)
+        return bvhtree
 
 
     def get_mouse_3d_vertex(self, event, context):
-        x, y     = event.mouse_region_x, event.mouse_region_y
-        region   = context.region
-        rv3d     = context.space_data.region_3d
-        view_rot = context.space_data.region_3d.view_rotation
+        region    = context.region
+        region_3d = context.space_data.region_3d
         
-        dir = view_rot @ mathutils.Vector((0,0,-1))
-        
-        # magix number 2.0 => property?
-        dir = dir.normalized() * -2.0
-                   
-        vec = region_2d_to_location_3d(region, rv3d, (x, y), dir)
+        mouse_coord = (event.mouse_region_x, event.mouse_region_y)
 
-        # we are in ortho mode
-        if not rv3d.is_perspective:
-            ind = self.get_snap_vertex_indizes(view_rot)
-            if ind is not None:
-                vec[ind[0]] = vec[ind[0]] - vec[ind[0]] % 0.1
-                vec[ind[1]] = vec[ind[1]] - vec[ind[1]] % 0.1
-        return vec
+        origin    = region_2d_to_origin_3d(region, region_3d, mouse_coord)
+
+        direction = region_2d_to_vector_3d(region, region_3d, mouse_coord)
+
+        hit, normal, index, distance = self.bvhtree.ray_cast(origin, direction)
+
+        return hit + (normal * self.offset)
         
             
     def modal(self, context, event):
@@ -113,6 +123,8 @@ class OT_draw_operator(Operator):
                 self.vertices.append(vertex)
 
                 self.create_batch()
+
+                return {"RUNNING_MODAL"}
 
             # Return (Enter) key is pressed
             if event.type == "RET":
