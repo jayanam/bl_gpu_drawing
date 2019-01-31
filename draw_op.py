@@ -12,7 +12,9 @@ from gpu_extras.batch import batch_for_shader
 import mathutils
 import math
 
+from mathutils import Vector
 from mathutils.bvhtree import BVHTree
+from mathutils.geometry import intersect_line_plane
 
 from bpy_extras.view3d_utils import (
     region_2d_to_vector_3d,
@@ -81,20 +83,35 @@ class OT_draw_operator(Operator):
         bpy.data.meshes.remove(mesh)
         return bvhtree
 
-
-    def get_mouse_3d_vertex(self, event, context):
+    def get_origin_and_direction(self, event, context):
         region    = context.region
         region_3d = context.space_data.region_3d
         
         mouse_coord = (event.mouse_region_x, event.mouse_region_y)
 
         origin    = region_2d_to_origin_3d(region, region_3d, mouse_coord)
-
         direction = region_2d_to_vector_3d(region, region_3d, mouse_coord)
 
-        hit, normal, index, distance = self.bvhtree.ray_cast(origin, direction)
+        return origin, direction
 
-        return hit + (normal * self.offset)
+        
+    def get_mouse_3d_on_mesh(self, event, context):
+        
+        origin, direction = self.get_origin_and_direction(event, context)
+
+        self.hit, self.normal, *_ = self.bvhtree.ray_cast(origin, direction)
+        if self.hit is not None:
+            self.hit = self.hit + (self.normal * self.offset)
+
+        return self.hit
+    
+    def get_mouse_3d_on_plane(self, event, context):
+        
+        origin, direction = self.get_origin_and_direction(event, context)
+               
+        # get the intersection point on infinite plane
+        return intersect_line_plane(origin, origin + direction, 
+        self.hit, self.normal)
         
             
     def modal(self, context, event):
@@ -108,18 +125,21 @@ class OT_draw_operator(Operator):
         if event.type == "MOUSEMOVE":
             
             if len(self.vertices) > 0:
-                self.mouse_vert = self.get_mouse_3d_vertex(event, context)
+                self.mouse_vert = self.get_mouse_3d_on_plane(event, context)
                 self.create_batch()
         
         if event.value == "PRESS":
             
             # Left mouse button pressed            
             if event.type == "LEFTMOUSE":
-                vertex = self.get_mouse_3d_vertex(event, context)
-                
-                self.vertices.append(vertex)
+                if len(self.vertices) == 0:
+                    vertex = self.get_mouse_3d_on_mesh(event, context)
+                else:
+                    vertex = self.get_mouse_3d_on_plane(event, context)
 
-                self.create_batch()
+                if vertex is not None: 
+                    self.vertices.append(vertex)
+                    self.create_batch()
 
                 return {"RUNNING_MODAL"}
 
