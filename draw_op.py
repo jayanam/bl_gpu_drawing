@@ -32,7 +32,7 @@ class OT_draw_operator(Operator):
         self.draw_handle_3d = None
         self.draw_event  = None
         self.mouse_vert = None
-        self.offset = 0.01
+        self.offset = 0.02
 
         self.vertices = []
         self.create_batch()
@@ -75,12 +75,14 @@ class OT_draw_operator(Operator):
     def bvhtree_from_object(self, context, object):
         bm = bmesh.new()
 
-        mesh = object.to_mesh(context.depsgraph, True)
-        bm.from_mesh(mesh)
+        depsgraph = context.evaluated_depsgraph_get()
+        ob_eval = object.evaluated_get(depsgraph)
+        mesh = ob_eval.to_mesh()
+
         bm.transform(object.matrix_world)
 
         bvhtree = BVHTree.FromBMesh(bm)
-        bpy.data.meshes.remove(mesh)
+        ob_eval.to_mesh_clear()
         return bvhtree
 
     def get_origin_and_direction(self, event, context):
@@ -195,7 +197,7 @@ class OT_draw_operator(Operator):
             points.append(self.mouse_vert)
                     
         self.shader = gpu.shader.from_builtin('3D_UNIFORM_COLOR')
-        self.batch = batch_for_shader(self.shader, 'LINE_STRIP', 
+        self.batch = batch_for_shader(self.shader, 'LINE_LOOP', 
         {"pos": points})
 
 	# Draw handler to paint in pixels

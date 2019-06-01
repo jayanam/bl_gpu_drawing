@@ -3,7 +3,7 @@ bl_info = {
     "author" : "jayanam",
     "description" : "Experimental GPU drawing with Blender",
     "blender" : (2, 80, 0),
-    "version": (0, 1, 0, 2),
+    "version": (0, 1, 0, 3),
     "location" : "",
     "warning" : "",
     "category" : "Generic"
