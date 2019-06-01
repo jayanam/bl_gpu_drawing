@@ -79,6 +79,7 @@ class OT_draw_operator(Operator):
         ob_eval = object.evaluated_get(depsgraph)
         mesh = ob_eval.to_mesh()
 
+        bm.from_mesh(mesh)
         bm.transform(object.matrix_world)
 
         bvhtree = BVHTree.FromBMesh(bm)
